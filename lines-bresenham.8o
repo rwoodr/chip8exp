@@ -1,0 +1,109 @@
+# Bresenham's line algorithm in Octo / Chip-8
+#
+# Robert Woodruff 2023
+# Chip-8 Coding Experiments
+# file: lines-bresenham.8o
+# https://github.com/rwoodr/chip8exp
+#
+# This version evolved from attempting to copy the example on Wikipedia
+# https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+# Additional help was found in the version posted by BESQUEUT, who modified the version
+# posted by AllyCat, who's version was ported from the BBC Basic version on Rosetta Code.
+# https://picaxeforum.co.uk/threads/converting-bresenhams-line-plotting-algorithm.29536/
+# https://rosettacode.org/wiki/Bitmap/Bresenham%27s_line_algorithm#BBC_BASIC
+
+
+:alias x0 v1	# x point 1
+:alias y0 v2	# y point 1
+:alias x1 v3	# x point 2
+:alias y1 v4	# y point 2
+:alias sx v5	# sign (direction) of x
+:alias sy v6	# sign (direction) of y
+:alias dx v7	# distance of x: abs(x1-x0)
+:alias dy v8	# distance of y: abs(y1-y0)
+# Re-use these registers
+:alias  x v1	# current x point for sprite
+:alias  y v2	# current y point for sprite
+:alias da v3	# Use for decision if dy  > dx
+:alias db v4	# Use for decision if dy <= dx
+
+: pixel 0x80
+
+: main
+	# Draw random lines
+	loop 
+		x0 := random 63
+		y0 := random 31
+		x1 := random 63
+		y1 := random 31
+		drawLine
+	again
+
+# Bresenham's line algorithm
+# Plot a line from two points in registers for x0/y0 and x1/y1
+# Requires 8 registers and all values will be modified
+#
+: drawLine
+	# Calculate absolute differences of points
+	# And determine direction (+ or -) of x and y
+	dx := x1
+	dx -= x0
+	sx := 1						
+	if vf != 1 begin		
+		dx := x0
+		dx -= x1
+		sx := 255
+	end	
+	dy := y1
+	dy -= y0
+	sy := 1
+	if vf != 1 begin
+		dy := y0
+		dy -= y1
+		sy := 255
+	end
+
+	# Double dx and dy
+	dx += dx
+	dy += dy
+	
+	# Set index register to single pixel sprite location
+	i := pixel
+	
+	# Determine slope
+	if dy > dx then jump yprimary
+
+	: xprimary
+	# Initialize decision variable with original value of dx
+	db >>= dx
+	loop
+		# Draw pixel
+		sprite x y 1
+		# Check for end
+		if x == x1 then return
+		# Increment primary axis
+		x += sx
+		# Decrease decision variable
+		db -= dy
+		# Check underflow on subtraction
+		if vf == 0 begin
+			# Increment secondary axis
+			y += sy
+			# Increase decision variable
+			db += dx
+		end
+	again
+	
+	: yprimary
+	# See comments on x version
+	da >>= dy
+	loop
+		sprite x y 1
+		if y == y1 then return
+		y += sy
+		da -= dx
+		if vf == 0 begin
+			x += sx
+			da += dy
+		end
+	again
