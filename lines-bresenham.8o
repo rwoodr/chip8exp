@@ -8,7 +8,7 @@
 # This version evolved from attempting to copy the example on Wikipedia
 # https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 # Additional help was found in the version posted by BESQUEUT, who modified the version
-# posted by AllyCat, who's version was ported from the BBC Basic version on Rosetta Code.
+# posted by AllyCat, whose version was ported from the BBC Basic version on Rosetta Code.
 # https://picaxeforum.co.uk/threads/converting-bresenhams-line-plotting-algorithm.29536/
 # https://rosettacode.org/wiki/Bitmap/Bresenham%27s_line_algorithm#BBC_BASIC
 
