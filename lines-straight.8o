@@ -1,0 +1,238 @@
+# Robert Woodruff 2023
+# Chip-8 Coding Experiments
+# https://github.com/rwoodr/chip8exp
+#
+# language: Octo
+# file: lines-straight.8o
+# Optimized functions for drawing straight horizontal and vertical lines
+#
+# These functions can be easily added to the Bresenham's line algorithm found in the
+# same repository. The loops have been unrolled for greater performance, but they can be
+# rolled back up to save some space. Also, the jump tables are written for SCHIP 128x64
+# high resolution mode, they can be shortened for 64x32 mode.
+# ======================================================================================
+
+
+:alias x0 v1	# x point 1
+:alias y0 v2	# y point 1
+:alias x1 v3	# x point 2
+:alias y1 v4	# y point 2
+:alias sx v5	# sign (direction) of x
+:alias sy v6	# sign (direction) of y
+:alias dx v7	# distance of x: abs(x1-x0)
+:alias dy v8	# distance of y: abs(y1-y0)
+# Re-use these registers
+:alias  x v1	# current x point for sprite
+:alias  y v2	# current y point for sprite
+:alias s8 v3	# variable for 8-pixel segments
+
+
+: pixel 0x80
+: hrzLine-8px 0xFF
+: vrtLine-8px 0x80 0x80 0x80 0x80 0x80 0x80 0x80 0x80
+
+
+# Example
+: main
+	# SCHIP 128x64 high resolution mode
+	hires
+	
+	# Clear screen and set restart timer
+	clear
+	v0 := 240    # 4 seconds
+	delay := v0  #
+	
+	# Random lines
+	loop 
+		# Random horizontal
+			# First point
+			v0 := random 63
+			x0 := random 127
+			y0 := v0
+			# Second point
+			x1 := random 127
+			y1 := v0
+			# Draw valid line (or skip invalid)
+			if x0 != x1 then drawLine
+			
+		# Random vertical
+			# First point
+			v0 := random 127
+			x0 := v0
+			y0 := random 63
+			# Second point
+			x1 := v0
+			y1 := random 63
+			# Draw valid line (or skip invalid)
+			if y0 != y1 then drawLine
+			
+		# Check restart timer
+		v0 := delay
+		if v0 == 0 then jump main
+	again
+
+
+#=======================================#
+#= Optimized Straight Line Algorithm  ==#
+#=======================================#
+# 
+# Plot a straight horizontal or vertical line from two points
+# Requires 8 registers and all values will be modified
+#
+: drawLine
+	# Calculate absolute differences of points
+	# And determine direction (+ or -) of x and y
+	dx := x1
+	dx -= x0
+	sx := 1
+	if vf != 1 begin		
+		dx := x0
+		dx -= x1
+		sx := 255
+	end	
+	dy := y1
+	dy -= y0
+	sy := 1
+	if vf != 1 begin
+		dy := y0
+		dy -= y1
+		sy := 255
+	end
+
+	# Optimized function for vertical lines
+	# This function will return to main when complete
+	if dx == 0 then jump vrtStraight
+	
+	# Optimized function for horizontal lines
+	# This function will return to main when complete
+	if dy == 0 then jump hrzStraight
+	
+	# Ignore any other line if we got this far
+	return
+	
+	
+	#=======================================#
+	#= Optimized horizontal line algorithm =#
+	#=======================================#
+	#
+	# Draw left to right only
+	# Draw (0 to 16) 8-pixel segments and then (0 to 7) single pixels
+	# Loops unrolled with jump indexes
+	#
+	: hrzStraight
+		# Swap starting point for right to left lines
+		if sx == 255 then x0 := x1
+		# Set sprite address to 8-pixel segment
+		i := hrzLine-8px
+		# Add starting point to distance calculation
+		# dx is now total line length (min 1, max 127)
+		dx += 1	
+		# dx value is now 2 to 128, copy dx to s8
+		s8 := dx
+		# Mask s8 to get amount evenly divisible by 8
+		vf := 0b11111000
+		s8 &= vf
+		# Subtract result from dx to get (line length mod 8)
+		dx -= s8
+		# s8 is 0 - 128 by eights, divide by 2 to get 0 to 64 by fours
+		s8 >>= s8
+		# dx is 0 - 7, multiply by 4 to get 0 to 28 by fours
+		dx <<= dx
+		dx <<= dx
+		# Calculate segments index and jump to it
+		v0 := 64
+		v0 -= s8
+		jump0 hrzSegmentsUnroll
+		: hrzSegmentsUnroll
+			sprite x y 1  x += 8  #  0 (128 pixels = 16 segments)
+			sprite x y 1  x += 8  #  4 (120 pixels = 15 segments)
+			sprite x y 1  x += 8  #  8 (112 pixels = 14 segments)
+			sprite x y 1  x += 8  # 12 (104 pixels = 13 segments)
+			sprite x y 1  x += 8  # 16 ( 96 pixels = 12 segments)
+			sprite x y 1  x += 8  # 20 ( 88 pixels = 11 segments)
+			sprite x y 1  x += 8  # 24 ( 80 pixels = 10 segments)
+			sprite x y 1  x += 8  # 28 ( 72 pixels =  9 segments)
+			sprite x y 1  x += 8  # 32 ( 64 pixels =  8 segments)
+			sprite x y 1  x += 8  # 36 ( 56 pixels =  7 segments)
+			sprite x y 1  x += 8  # 40 ( 48 pixels =  6 segments)
+			sprite x y 1  x += 8  # 44 ( 40 pixels =  5 segments)
+			sprite x y 1  x += 8  # 48 ( 32 pixels =  4 segments)
+			sprite x y 1  x += 8  # 52 ( 24 pixels =  3 segments)
+			sprite x y 1  x += 8  # 56 ( 16 pixels =  2 segments)
+			sprite x y 1  x += 8  # 60 (  8 pixels =  1 segment )
+			# Single pixels       # 64 ( <8 pixels =  0 segments)
+			i := pixel
+			# Calculate singles index and jump to it
+			v0 := 28
+			v0 -= dx
+			jump0 hrzSinglesUnroll
+		: hrzSinglesUnroll
+			sprite x y 1  x += 1  #  0 (7 pixels)
+			sprite x y 1  x += 1	#  4 (6 pixels)
+			sprite x y 1  x += 1  #  8 (5 pixels)
+			sprite x y 1  x += 1  # 12 (4 pixels)
+			sprite x y 1  x += 1  # 16 (3 pixels)
+			sprite x y 1  x += 1  # 20 (2 pixels)
+			sprite x y 1  return  # 24 (1 pixel )
+	;                         # 28 (0 pixels)
+
+
+	#=======================================#
+	#== Optimized vertical line algorithm ==#
+	#=======================================#
+	#
+	# Draw top to bottom only
+	# Draw (0 to 8) 8-pixel segments and then (0 to 7) single pixels
+	# Loops unrolled with jump indexes
+	#
+	: vrtStraight
+		# Swap starting point for bottom to top lines
+		if sy == 255 then y0 := y1
+		# Add starting point to distance calculation
+		# dx is now total line length (min 1, max 63)
+		dy += 1
+		# Set sprite address to 8-pixel segment
+		i := vrtLine-8px
+		# dy value is now 2 to 64, copy dx to s8
+		s8 := dy
+		# Mask s8 to get amount evenly divisible by 8
+		vf := 0b11111000
+		s8 &= vf
+		# Subtract result from dx to get (line length mod 8)
+		dy -= s8
+		# s8 is 0 - 128 by eights, divide by 2 to get 0 to 64 by fours
+		s8 >>= s8
+		# dx is 0 - 7, multiply by 4 to get 0 to 28 by fours
+		dy <<= dy
+		dy <<= dy
+
+		# Calculate index and jump to it
+		v0 := 32
+		v0 -= s8
+		jump0 vrtSegmentsUnroll
+		: vrtSegmentsUnroll
+			sprite x y 8  y += 8  #  0 (64 pixels = 8 segments)
+			sprite x y 8  y += 8  #  4 (56 pixels = 7 segments)
+			sprite x y 8  y += 8  #  8 (48 pixels = 6 segments)
+			sprite x y 8  y += 8  # 12 (40 pixels = 5 segments)
+			sprite x y 8  y += 8  # 16 (32 pixels = 4 segments)
+			sprite x y 8  y += 8  # 20 (24 pixels = 3 segments)
+			sprite x y 8  y += 8  # 24 (16 pixels = 2 segments)
+			sprite x y 8  y += 8  # 28 ( 8 pixels = 1 segment )
+			# Single pixels       # 32 (<8 pixels = 0 segments)
+			i := pixel
+			# Calculate index and jump to it
+			v0 := 28
+			v0 -= dy
+			jump0 vrtSinglesUnroll
+		: vrtSinglesUnroll
+			sprite x y 1  y += 1  #  0 (7 pixels)
+			sprite x y 1  y += 1	#  4 (6 pixels)
+			sprite x y 1  y += 1  #  8 (5 pixels)
+			sprite x y 1  y += 1  # 12 (4 pixels)
+			sprite x y 1  y += 1  # 16 (3 pixels)
+			sprite x y 1  y += 1  # 20 (2 pixels)
+			sprite x y 1  return  # 24 (1 pixel )
+	;                         # 28 (0 pixels)
+
+

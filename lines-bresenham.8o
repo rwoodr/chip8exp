@@ -1,16 +1,18 @@
-# Bresenham's line algorithm in Octo / Chip-8
-#
 # Robert Woodruff 2023
 # Chip-8 Coding Experiments
-# file: lines-bresenham.8o
 # https://github.com/rwoodr/chip8exp
 #
-# This version evolved from attempting to copy the example on Wikipedia
+# language: Octo
+# file: lines-bresenham.8o
+# Bresenham's line Algorithm
+#
+# This Chip-8 version evolved from attempting to copy the example on Wikipedia
 # https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 # Additional help was found in the version posted by BESQUEUT, who modified the version
 # posted by AllyCat, whose version was ported from the BBC Basic version on Rosetta Code.
 # https://picaxeforum.co.uk/threads/converting-bresenhams-line-plotting-algorithm.29536/
 # https://rosettacode.org/wiki/Bitmap/Bresenham%27s_line_algorithm#BBC_BASIC
+# ======================================================================================
 
 
 :alias x0 v1	# x point 1
