@@ -26,9 +26,17 @@
 :alias  y v2	# current y point for sprite
 :alias s8 v3	# variable for 8-pixel segments
 
+:const yReg 0x20 # Register for y axis in the upper-nibble
 
-: pixel 0x80
+
 : hrzLine-8px 0xFF
+: pixel 0x80
+: hrzLine-2px 0xC0
+: hrzLine-3px 0xE0
+: hrzLine-4px 0xF0
+: hrzLine-5px 0xF8
+: hrzLine-6px 0xFC
+: hrzLine-7px 0xFE
 : vrtLine-8px 0x80 0x80 0x80 0x80 0x80 0x80 0x80 0x80
 
 
@@ -124,59 +132,48 @@
 		if sx == 255 then x0 := x1
 		# Set sprite address to 8-pixel segment
 		i := hrzLine-8px
-		# dx is distance of x (min 1, max 127)
 		# Add starting point to distance calculation
+		# dx is now total line length (min 1, max 127)
 		dx += 1	
-		# dx is now total line length (2 to 128), copy dx to s8
+		# dx value is now 2 to 128, copy dx to s8
 		s8 := dx
 		# Mask s8 to get amount evenly divisible by 8
 		vf := 0b11111000
 		s8 &= vf
-		# Subtract result from dx to get (line length mod 8)
+		# Subtract result from dx to get remainder (line length mod 8)
 		dx -= s8
 		# s8 is 0 - 128 by eights, divide by 2 to get 0 to 64 by fours
 		s8 >>= s8
-		# dx is 0 - 7, multiply by 4 to get 0 to 28 by fours
-		dx <<= dx
-		dx <<= dx
 		# Calculate segments index and jump to it
-		# 128px wide = 64 (max 16 segments x 2 bytes per instruction x 2 intructions)
-		#  64px wide = 32 (max  8 segments x 2 bytes per instruction x 2 intructions)
 		v0 := 64
-		v0 -= s8 
+		v0 -= s8
 		jump0 hrzSegmentsUnroll
-		: hrzSegmentsUnroll       # s8
-			sprite x y 1  x += 8  #  0 (128 pixels = 16 segments)
-			sprite x y 1  x += 8  #  4 (120 pixels = 15 segments)
-			sprite x y 1  x += 8  #  8 (112 pixels = 14 segments)
-			sprite x y 1  x += 8  # 12 (104 pixels = 13 segments)
-			sprite x y 1  x += 8  # 16 ( 96 pixels = 12 segments)
-			sprite x y 1  x += 8  # 20 ( 88 pixels = 11 segments)
-			sprite x y 1  x += 8  # 24 ( 80 pixels = 10 segments)
-			sprite x y 1  x += 8  # 28 ( 72 pixels =  9 segments)
-			sprite x y 1  x += 8  # 32 ( 64 pixels =  8 segments)
-			sprite x y 1  x += 8  # 36 ( 56 pixels =  7 segments)
-			sprite x y 1  x += 8  # 40 ( 48 pixels =  6 segments)
-			sprite x y 1  x += 8  # 44 ( 40 pixels =  5 segments)
-			sprite x y 1  x += 8  # 48 ( 32 pixels =  4 segments)
-			sprite x y 1  x += 8  # 52 ( 24 pixels =  3 segments)
-			sprite x y 1  x += 8  # 56 ( 16 pixels =  2 segments)
-			sprite x y 1  x += 8  # 60 (  8 pixels =  1 segment )
-			# Single pixels       # 64 ( <8 pixels =  0 segments)
-			i := pixel
-			# Calculate singles index and jump to it
-			v0 := 28
-			v0 -= dx
-			jump0 hrzSinglesUnroll
-		: hrzSinglesUnroll
-			sprite x y 1  x += 1  #  0 (7 pixels)
-			sprite x y 1  x += 1	#  4 (6 pixels)
-			sprite x y 1  x += 1  #  8 (5 pixels)
-			sprite x y 1  x += 1  # 12 (4 pixels)
-			sprite x y 1  x += 1  # 16 (3 pixels)
-			sprite x y 1  x += 1  # 20 (2 pixels)
-			sprite x y 1  return  # 24 (1 pixel )
-	;                         # 28 (0 pixels)
+		: hrzSegmentsUnroll
+		sprite x y 1  x += 8  #  0 (128 pixels = 16 segments)
+		sprite x y 1  x += 8  #  4 (120 pixels = 15 segments)
+		sprite x y 1  x += 8  #  8 (112 pixels = 14 segments)
+		sprite x y 1  x += 8  # 12 (104 pixels = 13 segments)
+		sprite x y 1  x += 8  # 16 ( 96 pixels = 12 segments)
+		sprite x y 1  x += 8  # 20 ( 88 pixels = 11 segments)
+		sprite x y 1  x += 8  # 24 ( 80 pixels = 10 segments)
+		sprite x y 1  x += 8  # 28 ( 72 pixels =  9 segments)
+		sprite x y 1  x += 8  # 32 ( 64 pixels =  8 segments)
+		sprite x y 1  x += 8  # 36 ( 56 pixels =  7 segments)
+		sprite x y 1  x += 8  # 40 ( 48 pixels =  6 segments)
+		sprite x y 1  x += 8  # 44 ( 40 pixels =  5 segments)
+		sprite x y 1  x += 8  # 48 ( 32 pixels =  4 segments)
+		sprite x y 1  x += 8  # 52 ( 24 pixels =  3 segments)
+		sprite x y 1  x += 8  # 56 ( 16 pixels =  2 segments)
+		sprite x y 1  x += 8  # 60 (  8 pixels =  1 segment )
+		# Check if complete   # 64 ( <8 pixels =  0 segments)
+		if dx == 0 then return
+		# Increment i by dx for 1 - 7 pixel line sprite
+		i += dx
+		# Draw final partial line segment
+		sprite x y 1
+		# Done
+		return
+
 
 
 	#=======================================#
@@ -190,53 +187,43 @@
 	: vrtStraight
 		# Swap starting point for bottom to top lines
 		if sy == 255 then y0 := y1
-		# Add starting point to distance calculation
-		# dx is now total line length (min 1, max 63)
+		# dy is difference from y0 and y1 (min 1, max 63)
+		# Add starting point to dy for total line length
 		dy += 1
-		# Set sprite address to 8-pixel segment
-		i := vrtLine-8px
 		# dy value is now 2 to 64, copy dx to s8
 		s8 := dy
 		# Mask s8 to get amount evenly divisible by 8
 		vf := 0b11111000
 		s8 &= vf
-		# Subtract result from dx to get (line length mod 8)
+		# Subtract result from dy to get remainder (line length mod 8)
 		dy -= s8
+		# Modify final sprite instruction for <8 pixel line remainder
+		v0 := yReg      # upper nibble: y axis register
+		v0 += dy        # lower nibble: sprite height
+		i := vrtPartial # instruction address second byte
+		save v0         # save modified instruction
+		# Set sprite address to 8-pixel segment
+		i := vrtLine-8px
 		# s8 is 0 - 128 by eights, divide by 2 to get 0 to 64 by fours
 		s8 >>= s8
-		# dx is 0 - 7, multiply by 4 to get 0 to 28 by fours
-		dy <<= dy
-		dy <<= dy
-
 		# Calculate index and jump to it
-		#  64px tall = 32 (max  8 segments x 2 bytes per instruction x 2 intructions)
-		#  32px tall = 16 (max  4 segments x 2 bytes per instruction x 2 intructions)
 		v0 := 32
 		v0 -= s8
 		jump0 vrtSegmentsUnroll
-		: vrtSegmentsUnroll       # s8
-			sprite x y 8  y += 8  #  0 (64 pixels = 8 segments)
-			sprite x y 8  y += 8  #  4 (56 pixels = 7 segments)
-			sprite x y 8  y += 8  #  8 (48 pixels = 6 segments)
-			sprite x y 8  y += 8  # 12 (40 pixels = 5 segments)
-			sprite x y 8  y += 8  # 16 (32 pixels = 4 segments)
-			sprite x y 8  y += 8  # 20 (24 pixels = 3 segments)
-			sprite x y 8  y += 8  # 24 (16 pixels = 2 segments)
-			sprite x y 8  y += 8  # 28 ( 8 pixels = 1 segment )
-			# Single pixels       # 32 (<8 pixels = 0 segments)
-			i := pixel
-			# Calculate index and jump to it
-			v0 := 28
-			v0 -= dy
-			jump0 vrtSinglesUnroll
-		: vrtSinglesUnroll
-			sprite x y 1  y += 1  #  0 (7 pixels)
-			sprite x y 1  y += 1	#  4 (6 pixels)
-			sprite x y 1  y += 1  #  8 (5 pixels)
-			sprite x y 1  y += 1  # 12 (4 pixels)
-			sprite x y 1  y += 1  # 16 (3 pixels)
-			sprite x y 1  y += 1  # 20 (2 pixels)
-			sprite x y 1  return  # 24 (1 pixel )
-	;                         # 28 (0 pixels)
-
-
+		: vrtSegmentsUnroll
+		sprite x y 8  y += 8  #  0 (64 pixels = 8 segments)
+		sprite x y 8  y += 8  #  4 (56 pixels = 7 segments)
+		sprite x y 8  y += 8  #  8 (48 pixels = 6 segments)
+		sprite x y 8  y += 8  # 12 (40 pixels = 5 segments)
+		sprite x y 8  y += 8  # 16 (32 pixels = 4 segments)
+		sprite x y 8  y += 8  # 20 (24 pixels = 3 segments)
+		sprite x y 8  y += 8  # 24 (16 pixels = 2 segments)
+		sprite x y 8  y += 8  # 28 ( 8 pixels = 1 segment )
+		# Check if complete   # 32 (<8 pixels = 0 segments)
+		if dy == 0 then return
+		# Address to modify second byte for sprite height
+		:next vrtPartial
+		# Draw final partial line segment
+		sprite x y 1
+		# Done
+		return

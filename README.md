@@ -32,7 +32,7 @@ at the lowest speed of 7 cycles/frame.
 
 ## Optimized straight line algorithm
 
-Source: [lines-straight.8o](./lines-straight.8o) ([open in Octo](https://johnearnest.github.io/Octo/index.html?key=ja48Ijj5))
+Source: [lines-straight.8o](./lines-straight.8o) ([open in Octo](https://johnearnest.github.io/Octo/index.html?key=tWmzzlTP))
 
 This is is an optimized algorithm to draw horizontal and vertical lines from a start point and end point.
 The algorithm draws the line left-to-right or top-to-bottom only, using as many 8-pixel segments as possible and then draws any
