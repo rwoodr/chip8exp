@@ -6,7 +6,7 @@
 # file: lines-bresenham.8o
 # Bresenham's line Algorithm
 #
-# This Chip-8 version evolved from attempting to copy the example on Wikipedia
+# This Chip-8 version evolved from attempting to translate the example on Wikipedia
 # https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 # Additional help was found in the version posted by BESQUEUT, who modified the version
 # posted by AllyCat, whose version was ported from the BBC Basic version on Rosetta Code.
@@ -32,12 +32,14 @@
 : pixel 0x80
 
 : main
+	# SCHIP 128x64 resolution
+	#hires
 	# Draw random lines
-	loop 
-		x0 := random 63
-		y0 := random 31
-		x1 := random 63
-		y1 := random 31
+	loop                # hires max
+		x0 := random 63 # 127
+		y0 := random 31 #  63
+		x1 := random 63 # 127
+		y1 := random 31 #  63
 		drawLine
 	again
 

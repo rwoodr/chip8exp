@@ -16,7 +16,7 @@ This repository is a collection of my Octo coding experiments.
 Source: [lines-bresenham.8o](./lines-bresenham.8o) ([open in Octo](https://johnearnest.github.io/Octo/index.html?key=Pwickczd))
 
 Bresenham's algorithm for plotting an approximation of a straight line on a grid was developed by Jack Bresenham in 1962.
-The version presented here evolved from attempting to copy the example on
+The version presented here evolved from attempting to translate the example on
 [Wikipedia](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm).
 My first working implementation was not pretty, so I dug deeper and found help in a
 [forum post](https://picaxeforum.co.uk/threads/converting-bresenhams-line-plotting-algorithm.29536/).
@@ -34,7 +34,7 @@ at the lowest speed of 7 cycles/frame.
 
 Source: [lines-straight.8o](./lines-straight.8o) ([open in Octo](https://johnearnest.github.io/Octo/index.html?key=ja48Ijj5))
 
-This is is an optimized algorithm to draw horizontal and vertical lines.
+This is is an optimized algorithm to draw horizontal and vertical lines from a start point and end point.
 The algorithm draws the line left-to-right or top-to-bottom only, using as many 8-pixel segments as possible and then draws any
 remaining portion of the line with single pixels. The code uses unrolled loops for increased performance, but a loop can
 be used to save space.  

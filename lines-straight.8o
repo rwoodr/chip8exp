@@ -124,10 +124,10 @@
 		if sx == 255 then x0 := x1
 		# Set sprite address to 8-pixel segment
 		i := hrzLine-8px
+		# dx is distance of x (min 1, max 127)
 		# Add starting point to distance calculation
-		# dx is now total line length (min 1, max 127)
 		dx += 1	
-		# dx value is now 2 to 128, copy dx to s8
+		# dx is now total line length (2 to 128), copy dx to s8
 		s8 := dx
 		# Mask s8 to get amount evenly divisible by 8
 		vf := 0b11111000
@@ -140,10 +140,12 @@
 		dx <<= dx
 		dx <<= dx
 		# Calculate segments index and jump to it
+		# 128px wide = 64 (max 16 segments x 2 bytes per instruction x 2 intructions)
+		#  64px wide = 32 (max  8 segments x 2 bytes per instruction x 2 intructions)
 		v0 := 64
-		v0 -= s8
+		v0 -= s8 
 		jump0 hrzSegmentsUnroll
-		: hrzSegmentsUnroll
+		: hrzSegmentsUnroll       # s8
 			sprite x y 1  x += 8  #  0 (128 pixels = 16 segments)
 			sprite x y 1  x += 8  #  4 (120 pixels = 15 segments)
 			sprite x y 1  x += 8  #  8 (112 pixels = 14 segments)
@@ -207,10 +209,12 @@
 		dy <<= dy
 
 		# Calculate index and jump to it
+		#  64px tall = 32 (max  8 segments x 2 bytes per instruction x 2 intructions)
+		#  32px tall = 16 (max  4 segments x 2 bytes per instruction x 2 intructions)
 		v0 := 32
 		v0 -= s8
 		jump0 vrtSegmentsUnroll
-		: vrtSegmentsUnroll
+		: vrtSegmentsUnroll       # s8
 			sprite x y 8  y += 8  #  0 (64 pixels = 8 segments)
 			sprite x y 8  y += 8  #  4 (56 pixels = 7 segments)
 			sprite x y 8  y += 8  #  8 (48 pixels = 6 segments)
