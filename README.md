@@ -36,8 +36,8 @@ Source: [lines-straight.8o](./lines-straight.8o) ([open in Octo](https://johnear
 
 This is is an optimized algorithm to draw horizontal and vertical lines from a start point and end point.
 The algorithm draws the line left-to-right or top-to-bottom only, using as many 8-pixel segments as possible and then draws any
-remaining portion of the line with single pixels. The code uses unrolled loops for increased performance, but a loop can
-be used to save space.  
+remaining portion of the line with a final 1 to 7 pixel segment. The code uses unrolled loops for increased performance, but a loop can
+be used to save space. The vertical function uses self modifying code to set the sprite height of the final segment.  
 &nbsp;  
 
 ![GIF recording of optimized straight line algorithm in Octo](./images/lines-straight.gif)  
