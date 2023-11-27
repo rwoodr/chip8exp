@@ -26,8 +26,6 @@
 :alias  y v2	# current y point for sprite
 :alias s8 v3	# variable for 8-pixel segments
 
-:const yReg 0x20 # Register for y axis in the upper-nibble
-
 
 : hrzLine-8px 0xFF
 : pixel 0x80
@@ -60,7 +58,7 @@
 			# Second point
 			x1 := random 127
 			y1 := v0
-			# Draw valid line (or skip invalid)
+			# Draw line (or skip invalid)
 			if x0 != x1 then drawLine
 			
 		# Random vertical
@@ -71,7 +69,7 @@
 			# Second point
 			x1 := v0
 			y1 := random 63
-			# Draw valid line (or skip invalid)
+			# Draw line (or skip invalid)
 			if y0 != y1 then drawLine
 			
 		# Check restart timer
@@ -108,11 +106,11 @@
 	end
 
 	# Optimized function for vertical lines
-	# This function will return to main when complete
+	# This function will return to caller of `drawLine` when complete
 	if dx == 0 then jump vrtStraight
 	
 	# Optimized function for horizontal lines
-	# This function will return to main when complete
+	# This function will return to caller of `drawLine` when complete
 	if dy == 0 then jump hrzStraight
 	
 	# Ignore any other line if we got this far
@@ -124,7 +122,7 @@
 	#=======================================#
 	#
 	# Draw left to right only
-	# Draw (0 to 16) 8-pixel segments and then (0 to 7) single pixels
+	# Draw (0 to 16) 8-pixel segments, then (0 or 1) of a (1 to 7) pixel segment
 	# Loops unrolled with jump indexes
 	#
 	: hrzStraight
@@ -181,8 +179,8 @@
 	#=======================================#
 	#
 	# Draw top to bottom only
-	# Draw (0 to 8) 8-pixel segments and then (0 to 7) single pixels
-	# Loops unrolled with jump indexes
+	# Draw (0 to 16) 8-pixel segments, then (0 or 1) of a (1 to 7) pixel segment
+	# Loop unrolled with jump index
 	#
 	: vrtStraight
 		# Swap starting point for bottom to top lines
@@ -197,11 +195,6 @@
 		s8 &= vf
 		# Subtract result from dy to get remainder (line length mod 8)
 		dy -= s8
-		# Modify final sprite instruction for <8 pixel line remainder
-		v0 := yReg      # upper nibble: y axis register
-		v0 += dy        # lower nibble: sprite height
-		i := vrtPartial # instruction address second byte
-		save v0         # save modified instruction
 		# Set sprite address to 8-pixel segment
 		i := vrtLine-8px
 		# s8 is 0 - 128 by eights, divide by 2 to get 0 to 64 by fours
@@ -219,11 +212,19 @@
 		sprite x y 8  y += 8  # 20 (24 pixels = 3 segments)
 		sprite x y 8  y += 8  # 24 (16 pixels = 2 segments)
 		sprite x y 8  y += 8  # 28 ( 8 pixels = 1 segment )
-		# Check if complete   # 32 (<8 pixels = 0 segments)
-		if dy == 0 then return
-		# Address to modify second byte for sprite height
-		:next vrtPartial
-		# Draw final partial line segment
-		sprite x y 1
-		# Done
-		return
+		# Complete line       # 32 (<8 pixels = 0 segments)
+		# Copy dy to v0 and x4 it (2 instructions * 2 bytes each)
+		v0 <<= dy
+		v0 <<= v0
+		# v0 is now jump index for final segment
+		jump0 vrtFinalSegment
+		: vrtFinalSegment
+		return       return # 0 pixels (line length was divisible by 8)
+		sprite x y 1 return # 1 pixel
+		sprite x y 2 return # 2 pixels
+		sprite x y 3 return # 3 pixels
+		sprite x y 4 return # 4 pixels
+		sprite x y 5 return # 5 pixels
+		sprite x y 6 return # 6 pixels
+		sprite x y 7 return # 7 pixels
+
