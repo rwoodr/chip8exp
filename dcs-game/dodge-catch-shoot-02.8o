@@ -1,0 +1,120 @@
+: ship-straight
+	0x10 0x28 0x28 0x44 0xBA 0x00 0x00
+: ship-left
+	0x10 0x28 0x28 0x24 0x5A 0x00 0x00
+: ship-right
+	0x10 0x28 0x28 0x48 0xB4 0x00 0x00
+: ship-forward
+	0x10 0x28 0x28 0x44 0xBA 0x00 0x10
+	
+: ship-test
+	0x00 0x10 0x10 0x38 0x00 0x00 0x00
+: ship-test-left
+	0x00 0x18 0x18 0x24 0x00 0x00 0x00
+: ship-test-right
+	0x00 0x30 0x30 0x48 0x00 0x00 0x00
+: ship-test-up
+	0x00 0x10 0x00 0x28 0x38 0x00 0x00
+: ship-test-down
+	0x10 0x00 0x28 0x38 0x00 0x00 0x00
+	
+:const keyLeft		 7
+:const keyRight		 9
+:const keyUp			 5
+:const keyDown		 8
+:alias tempPos		v4
+#:alias xxx				v5
+:alias hrzDir		 	v6
+:alias vrtDir		 	v7
+#:alias cyclCount  v5
+#:alias cyclCount2 v6
+#:alias dlayValue	v7
+
+#:monitor v5 2
+
+: main
+	# Initialize
+	i  := ship-test
+	v0 := 27
+	v1 := 26
+	sprite v0 v1 7
+	hrzDir := 0
+	#cyclCount := 0
+	#cyclCount2 := 0
+	
+	# Count cycles to determine vm speed
+	#dlayValue := countDelay
+	#delay := dlayValue
+	#loop
+	#	if cyclCount == 255 then cyclCount2 += 1
+	#	cyclCount += 1
+	#	dlayValue := delay
+	#	if dlayValue != 0 then
+	#again
+	
+
+	# Set delay timer for movement speed limiter
+	v5 := 1
+	delay := v5
+	
+	# Primary program loop
+	loop
+	
+		# Check delay timer for movement speed limiter
+		v6 := delay
+		if v6 != 0 then jump skipMove
+		# Time to check for movement
+		v5 := 1																			# Reset delay timer 
+		delay := v5																	#  for movement speed limiter
+		
+		# Horizontal movment
+		hrzMovement
+		# Vertical movement
+		vrtMovement
+		: skipMove
+	again
+	
+	
+	# Check for <- and -> key presses and process movement
+	: hrzMovement
+		v2 := keyLeft																# Test for
+		if v2 key then hrzDir += 255								#  left arrow
+		v2 := keyRight															# Test for
+		if v2 key then hrzDir += 1									#  right arrow
+																								# No key or both keys = 0
+		if hrzDir != 0 begin												#  don't move on 0
+			tempPos := v0															# Copy current position
+			tempPos += hrzDir													# Calculate new position
+			if tempPos == 0 then jump hrzLimit				# Left limit, don't move
+			if tempPos == 57 then jump hrzLimit				# Right limit, don't move
+			i := ship-test-left												# Set sprite for moving left
+			if hrzDir == 1 then i := ship-test-right  #  change it to right if required
+			v0 := tempPos															# Apply new position
+			sprite v0 v1 7														# Draw sprite (and clear previous)
+			: hrzLimit																# Jump here if limit reached
+			hrzDir := 0																# Reset horizontal direction
+		end
+	;
+	
+		# Check for 'up' and 'down' key presses and process movement
+	: vrtMovement
+		v2 := keyUp																	# Test for
+		if v2 key then vrtDir += 255								#  up arrow
+		v2 := keyDown																# Test for
+		if v2 key then vrtDir += 1									#  down arrow
+																								# No key or both keys = 0
+		if vrtDir != 0 begin												#  don't move on 0
+			tempPos := v1															# Copy current position
+			tempPos += vrtDir													# Calculate new position
+			if tempPos == 19 then jump vrtLimit				# Top limit, don't move
+			if tempPos == 27 then jump vrtLimit				# Bottom limit, don't move
+			i := ship-test-up													# Set sprite for moving up
+			if vrtDir == 1 then i := ship-test-down		#  change it to down if required
+			v1 := tempPos															# Apply new position
+			sprite v0 v1 7														# Draw sprite (and clear previous)
+			: vrtLimit																# Jump here if limit reached
+			vrtDir := 0																# Reset vertical direction
+		end
+	;
+	
+	
