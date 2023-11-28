@@ -36,7 +36,7 @@ Source: [lines-straight.8o](./lines-straight.8o) ([open in Octo](https://johnear
 This is is an optimized algorithm to draw horizontal and vertical lines from a start point and end point.
 The algorithm draws the line left-to-right or top-to-bottom only, using as many 8-pixel segments as possible and then draws any
 remaining portion of the line with a final 1 to 7 pixel segment. The code uses an unrolled loop for increased performance, but a loop can
-be used to save space. 
+be used to save space.  
 &nbsp;  
 
 ![GIF recording of optimized straight line algorithm in Octo](./images/lines-straight.gif)  
@@ -51,4 +51,8 @@ SCHIP `hires` 128x64 mode running in Octo at the lowest speed of 7 cycles/frame.
 Source: [dodge-catch-shoot-1.1-octo.8o](./dcs-game/dodge-catch-shoot-1.1-octo.8o)
 ([open in Octo](https://johnearnest.github.io/Octo/index.html?key=eBdNMAl6))  
 
-Read [details](./dcs-game/README.md) about this game
+This was my Octojam 10 submission. It has its own [readme](./dcs-game/README.md) with more information.  
+&nbsp;  
+
+![GIF recording of Dodge Catch Shoot](./images/dcs.gif)  
+Dodge Catch Shoot gameplay.
