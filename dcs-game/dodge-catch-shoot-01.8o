@@ -1,0 +1,58 @@
+: ship-straight
+	0x10 0x28 0x28 0x44 0xBA 0x00 0x00
+: ship-left
+	0x10 0x28 0x28 0x24 0x5A 0x00 0x00
+: ship-right
+	0x10 0x28 0x28 0x48 0xB4 0x00 0x00
+: ship-forward
+	0x10 0x28 0x28 0x44 0xBA 0x00 0x10
+	
+:const keyLeft		7
+:const keyRight		9
+:const keyUp		5
+:const keyDown		8
+
+: main
+	i  := ship-straight
+	v0 := 27
+	v1 := 26
+
+	loop
+	  clear
+		sprite v0 v1 7
+		v3 := 0
+		
+		v2 := keyLeft
+		if v2 key begin
+			if v0 != 0 begin
+				i := ship-left
+				v3 := 1
+				v0 += 255
+			end
+		end
+		
+		v2 := keyRight
+		if v2 key begin
+			if v0 != 57 begin
+				i := ship-right
+				v3 := 1
+				v0 += 1
+			end
+		end
+		
+		v2 := keyUp
+		if v2 key begin
+			if v1 != 19 begin
+				i := ship-forward
+				v3 := 1
+				v1 += 255
+			end
+		end
+		
+		v2 := keyDown
+		if v2 key begin
+			if v1 != 26 then v1 += 1
+		end
+		
+		if v3 == 0 then i := ship-straight
+	again

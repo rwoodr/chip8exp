@@ -1,0 +1,863 @@
+			 #########
+######## SETUP ###############################################################
+			 #########
+
+# Constants
+:const upKey			 		 5
+:const fireLaserKey		 6
+:const shipInitX			30
+:const shipInitY			27
+:const shipSpeedLimit 24	# Lower is faster
+:const maxRocks		 		16
+:const rkSpacing   		 5	# Min pixels between spawns
+:calc  maxRckIndex	 { 2 * maxRocks }
+:const rockSpeedLimit 32	# Lower is faster
+:const laserLimit			12 	# Time between laser firings in 60ths of a second
+:const laserViewTime	 2 	# Time before laser is erased in 60ths of a second
+
+# Rock registers
+# Uses 0 thru 8 for scrolling rocks down
+# Uses 0 thru 6 for locating rock hit by laser
+:alias rockX			v0
+:alias rockY			v1
+:alias rksNeeded  v2
+:alias rockDelay	v3
+:alias rockOldY		v4
+:alias rockIndex	v5
+:alias rockOffset	v6
+:alias rkClsnType	v7
+:alias rkClsnFlag	v8
+
+
+# Registers for ship movement
+:alias movHrz			v2
+:alias movVrt			v3
+:alias dirVal			v4 #-\___Same
+:alias arrowCheck	v4 #-/   Same
+:alias keyLeft		v5
+:alias keyRight		v6
+:alias keyUp			v7
+:alias keyDown		v8
+
+# Registers for ship weapons
+# Rock registers 0 thru 6 are loaded when time to search for rock hit by laser
+#		laser registers 7 and 8 are still needed at that time
+:alias lsrHitPtrn	v0
+:alias lsrVX			v0	# Delayed laser erase
+:alias laserTemp	v1
+:alias lsrVYStrt	v1	# Delayed laser erase - These are saved to memory at end of laser function
+:alias lsrVYEnd		v2	# Delayed laser erase	- 	and loaded when time to erase laser
+:alias laserY			v7
+:alias lsrHitY		v8
+	
+
+# Globals - Don't load or save past v8
+:alias rockItr		v9
+:alias shpItr			va
+:alias laserState	vb
+:alias flameState	vc
+:alias shipX			vd
+:alias shipY			ve
+
+
+: initGame
+	initXYArrays
+	initRegisters
+	initShip
+;
+
+: initRegisters
+	# Registers v0 thru v8 are free to use
+	# Don't [use/load/save] past v8
+
+	# Globals v9 thru ve
+	rockItr			:= 0
+	shpItr			:= 0
+	laserState	:= 0
+	flameState	:= 0
+	shipX				:= shipInitX
+	shipY				:= shipInitY
+	
+	# Ship
+	movHrz			:= 0
+	movVrt			:= 0
+	dirVal			:= 0
+	arrowCheck	:= 0
+	keyLeft			:= 7
+	keyRight		:= 9
+	keyUp				:= 5
+	keyDown			:= 8
+	# Save ship values for loading of defaults in ship movement function
+	# 	these are not later saved with updated values
+	i := movement-registers
+	save v8	
+	
+	# Rocks
+	rockX				:= 0
+	rockY				:= 0
+	rksNeeded 	:= maxRocks
+	rockDelay		:= rkSpacing
+	rockOldY		:= 0
+	rockIndex		:= 0
+	rockOffset	:= 32
+	rkClsnType	:= 0
+	rkClsnFlag	:= 0
+	# Save ship values for easy loading of defaults for rock functions
+	# 	later only v2/v3 [rksNeeded,rockDelay] will be saved with updated values
+	i := rock-registers
+	save v8
+;
+
+: initShip
+	# Draw ship in start position
+	i := ship-test
+	sprite shipX shipY 8
+;
+
+:macro initXYMacro arrayAddr {
+	i := arrayAddr
+	save vf
+	v0 := 16
+	i += v0
+	v0 := 0
+	save vf
+}
+
+: initXYArrays
+	i := zero-registers
+	load vf
+	initXYMacro dodge-xys
+	initXYMacro shoot-xys
+	initXYMacro catch-xys
+;
+
+# Player stats
+	# Score
+	# Lifes
+	# Stats
+		# Rocks
+			# Dodge total
+				# Dodged
+				# Collided
+			# Shoot total
+				# Hit
+				# Missed
+				# Collided
+			# Catch total
+				# Caught
+				# Shot
+				# Missed
+
+
+			 ########
+######## MAIN ###############################################################
+			 ########
+
+
+: main
+	# Initialize everything except player stats
+	initGame
+	# Primary game loop
+	loop
+		# Handle ship functions
+		playerShip			
+		# Spawn and scroll rocks 
+		playField
+		# Check if ship was destroyed by rock collision
+		if rkClsnFlag == 1 begin
+			# Show animation and clear screen
+			shipLost
+			# Respawn with a jump to keep return stack empty
+			jump main
+		end
+	
+	again
+
+
+: playerShip
+	# Blink thruster flame when UP is pressed
+	shipThrust
+	# Ship weapons fire
+	shipFire
+	# Handle ship movement
+	shipMove
+;
+
+
+# Spawn and move objects
+: playField
+	# Decrement counter used to limit rock fall speed
+	rockItr -= 1
+	# Exit function if not yet time to process rocks
+	if rockItr != 0 then return
+	# Reset counter
+	rockItr := rockSpeedLimit
+		
+	# Load registers
+	# v0 and v1 get overwritten with rock XY array data
+	# v2 and v3 values must be saved at end of function
+	# v4 ... v8 load with default values
+	i := rock-registers
+	load v8
+		
+	# Spawn new rock
+	rockSpawn
+	# Move existing rocks
+	rocksMove
+	
+	# Save registers
+	i := rock-registers
+	# Only v2 and v3 need updated values saved
+	save v3
+;
+
+
+			 #########
+######## ROCKS ###############################################################
+			 #########
+
+
+:macro mvMacro arrayAddr {
+	:unpack 0xA arrayAddr		# Put value for [i := xyarray] instruction into v0 and v1
+	rocksMoveByType					# Move all rocks of this type one pixel down
+}
+
+
+# Scroll all rocks one pixel down, one type at a time
+: rocksMove
+	# Check if there are any rocks to move
+	if rksNeeded == maxRocks then return
+	
+	# Macro for each type puts instruction into v0/v1 and calls move function
+	rkClsnType := 1			# Destroy ship on collision with these rock types
+	mvMacro dodge-xys
+	mvMacro shoot-xys
+	rkClsnType := 2			# Erase rock on collision with ship for this rock type
+	mvMacro catch-xys
+;
+
+
+: rocksMoveByType
+	# v0 and v1 contain an instruction
+	# Set i to location that instruction is expected
+	i := mvSetiXY 		
+	# Save instruction there
+	save v1
+	# Reset
+	rockIndex := 0
+	rockOffset := 32
+	# Iterate array elements
+	loop
+		# Stop scrolling rocks if ship destroyed by collision
+		if rkClsnFlag == 1 then return
+		# Set i to XY array for current rock type
+		# Required every iteration as i is also used for sprite address
+		mvSetiXY
+		# Increment i to next element
+		i += rockIndex
+		# Load X into v0 and Y into v1
+		load v1
+		# If rockY is 0 no rock exists in this slot
+		if rockY == 0 then jump rocksMvNext
+		# Copy rockY value before incrementing
+		rockOldY := rockY
+		# Increment and save rockY before changing i
+		rockY += 1
+		# Save updated value
+		save v1
+		# Increment i by rockOffset to locate sprite for current rock type
+		i += rockOffset
+		# Draw over rock to erase
+		sprite rockX rockOldY 4
+		# Check for rollover from 255 to 0, that indicates rock has scrolled off screen
+		if rockY == 0 begin
+			# Flag new rock for spawn
+			rksNeeded += 1
+			jump rocksMvNext
+		end
+		# Draw rock in updated location
+		sprite rockX rockY 4
+		# Check for and process a rock collision
+		if vf == 1 then rockCollision
+		# Prepare to check next array slot
+		: rocksMvNext
+		rockIndex += 2
+		# Sprite location offset reduces as we go down array
+		rockOffset -= 2
+		# Check if end of array
+		if rockIndex != maxRckIndex then
+	again
+;
+
+# Process rock collision
+: rockCollision
+	# Catch type rock
+	if rkClsnType == 2 begin
+		# Draw rock again to erase
+		sprite rockX rockY 4
+		# Set i to XY array for current rock type and advance to current element
+		mvSetiXY
+		i += rockIndex
+		# Delete rock (clear Y value) and save to array
+		rockY := 0
+		save v1
+		# Flag new rock for spawn
+		rksNeeded += 1
+	# Dodge or shoot type rock
+	else
+		# Set ship lost flag
+		rkClsnFlag := 1
+	end
+;
+
+# SMC [set i to XY array] instruction
+: mvSetiXY
+	# This instruction is modified to be an [i := addr] instruction
+	return
+;
+
+: rockSpawn
+	# Don't spawn rock when laser beam is visible
+	#		otherwise might spawn on laser
+	if laserState == 1 then return
+	# Don't exceed limit
+	if rksNeeded == 0 then return
+	# Delay rock spawns a minimum of rock sprite height to avoid overlap
+	rockDelay -= 1
+	if rockDelay != 0 then return
+	# Reset delay counter
+	rockDelay := rkSpacing
+	# Offset for locating sprite data x bytes after matching XY array
+	rockOffset := 32
+	# Select random number 0 - 7
+	# Double twice (2 bytes * 2 instructions) for 0 - 28 by fours
+	v0 := random 0b00011100
+	# Jump into table with random number as index
+	jump0 rockSpawnTable
+	# Random chance to not spawn a rock reduces clumping
+: rockSpawnTable
+	return return										# 0 - 2/8 = return without spawn
+	i := dodge-xys jump rockInit										# 1
+	i := dodge-xys jump rockInit		# 2 - 3/8 = spawn a dodge rock
+	i := dodge-xys jump rockInit		# 3
+	i := dodge-xys jump rockInit		# 4
+	i := shoot-xys jump rockInit		# 5 - 2/8 = spawn a shoot rock
+	i := shoot-xys jump rockInit		# 6
+	i := catch-xys jump rockInit		# 7 - 1/8 = spawn a catch rock
+: rockInit
+	# Amount to increase i for each iteration
+	rockIndex := 2
+	# Search thru array for first Y = 0
+	loop
+		# Load data v0 = X and v1 = Y
+		load v1
+		# rockY > 0 a rock exists in this slot
+		if rockY != 0 begin
+			# Next slot
+			i += rockIndex
+			# Update offset, as i goes up offset goes down
+			rockOffset -= rockIndex
+			# Check if end of array
+			if rockOffset == 0 then handleError
+			# Restart loop here
+			again	
+		end
+	# Found slot with rockY set to 0
+	rksNeeded -= 1
+	# Temp use of rockY as offset for rockX
+	# Get random number 0 - 15 for playfield offset
+	rockY := random 0b00001111
+	# Subtract 8 from offset to give range of -8 to +7
+	# Must add 16 to playfield to center it
+	# Result: Add 8 to offset ( +16 - 8 = 8)
+	rockY += 8
+	# Set rockX to random location 0 - 31
+	rockX := random 0b00011111
+	# Apply offset giving playfield of 46 pixels (8 to 54)
+	rockX += rockY
+	# Set rockY to top of screen
+	#  use 224 instead of 0 (same location) to rollover when rock gets to bottom of screen
+	rockY := 224
+	# Save x/y values to array
+	save v1
+	# Set i to sprite for this rock type using offset
+	i += rockOffset
+	# Draw sprite
+	sprite rockX rockY 4		
+;
+
+
+			 ########
+######## SHIP ###############################################################
+			 ########
+
+
+: ship-crash-1
+	0x00 0x00 0x00 0x08 0x22 0x08 0x00 0x00
+: ship-crash-2
+	0x00 0x00 0x14 0x0C 0x6B 0x08 0x04 0x00
+: ship-crash-3
+	0x00 0x00 0x16 0x0C 0xCD 0x00 0x04 0x04
+: ship-crash-4
+	0x00 0x00 0x02 0x08 0x84 0x00 0x00 0x04
+
+
+# Show ship destroyed animation
+: shipLost
+	# Erase ship
+	i := ship-test sprite shipX shipY 4
+	# Move drawing position left and up
+	shipX -= 2
+	shipY -= 1
+	# Animate
+	i := ship-crash-1 animFrame
+	i := ship-crash-2 animFrame
+	i := ship-crash-3 animFrame
+	i := ship-crash-4 animFrame
+	# Clear screen
+	clear
+;
+
+: animFrame
+	# Draw
+	sprite shipX shipY 8
+	# Do nothing for a bit to see the frames of animation
+	v0 := 3
+	delay := v0
+	loop
+		v0 := delay
+		if v0 != 0 then
+	again
+;
+
+
+# Handle ship movement
+: shipMove
+	# Decrement iterations count
+	shpItr -= 1
+	# Limit movement speed by only running function when itr is 0
+	if shpItr != 0 then return
+	# Reset
+	shpItr := shipSpeedLimit
+
+	# Load registers for moving ship
+	i := movement-registers
+	load v8
+	# No horizontal arrow keys will result in a movement value of 0
+	# Both horizontal keys will also result in a movement value of 0
+	# One horizontal key will result in a movement value of -1 or +1 (up or down)
+	# Ditto for vertical: 0 or -1 or +1 (na or left or right)
+	# Horizontal
+	if keyLeft key begin 
+		 if shipX != 0 then movHrz += 255
+	end
+	if keyRight key begin
+		if shipX != 59 then movHrz += 1
+	end
+	if movHrz != 0 then arrowCheck += 1
+	# Vertical
+	if keyUp key begin
+		if shipY != 0 then movVrt += 255
+	end
+	if keyDown key begin
+		if shipY != 27 then movVrt += 1
+	end
+	if movVrt != 0 then arrowCheck += 1
+	# Return if no valid arrow key combination pressed
+	# Will be zero for: no keys, all 4 keys, both vrt (no hrz), both hrz (no vrt)
+	# Three key presses will cancel one direction out and behave as a single key
+	# Single key presses will pass, as will two with one hrz / one vrt
+	if arrowCheck == 0 then return
+	# Reset - uses same register as arrowCheck and must be cleared
+	dirVal := 0
+	
+	# Erase thruster flame before moving ship
+	# Do now to avoid needing variables for flame position
+	if flameState == 1 begin
+		i := flame
+		sprite shipX shipY 8
+		flameState := 0
+	end
+	
+	# Update position: add or subtract 1 from one or both vars
+	shipX += movHrz
+	shipY += movVrt
+	# Use the direction value as an offset to sprite table
+	# dirVal is x8 for 8 byte sprites
+	if movVrt == -1 then dirVal += 0b00001000		# Up
+	if movVrt ==  1 then dirVal += 0b00010000		# Down
+	if movHrz == -1 then dirVal += 0b00100000		# Left
+	if movHrz ==  1 then dirVal += 0b01000000		# Right
+	# Set i to base sprite
+	i := ship-test
+	# Advance i to use sprite that matches movement direction
+	i += dirVal
+	# Draw
+	sprite shipX shipY 8
+;
+
+
+# Handle ship weapons
+: shipFire
+	# Check if laser is currently visible
+	if laserState == 1 begin
+		# Laser beam visible on screen
+		# Check if time to erase laser
+		laserTemp := delay
+		if laserTemp != 0 then return
+		# Erase laser beam from screen
+		delShipLaser
+	else
+		# No laser beam on screen
+		# Check for laser key
+		laserTemp := fireLaserKey
+		if laserTemp -key then return		
+		# Don't fire when ship is at top of screen
+		if shipY == 0 then return
+		# Check laser cooldown timer
+		laserTemp := delay
+		if laserTemp == 0 then shipFireLaser	
+	end
+
+	# Future plans:
+	# Power ups
+		# Aquired randomly from catch type rocks
+		# Only one active at a time
+		# Dedicated secondary fire key
+	# Potential items
+			# One-up
+			# Point multiplier
+			# Mines
+			# Horizontal laser
+			# Rockets
+				# Able to destroy dodge type rocks
+			# Nuke
+				# Destroys everything including player
+			# Super laser
+				# Not stopped until reaching top of screen
+				# Able to destroy multiple rocks including dodge type rocks
+			# Auto target laser
+				# Hits random shoot type rock
+				# Travels at any necessary angle
+				# Goes thru any rock between ship and intended target
+			# Shield
+				# One time use
+				# Short lifespan
+				# Destroys any rock that touches ship
+;
+
+
+: shipFireLaser
+	# Set starting vertical position for laser
+	laserY := shipY
+	# Clear collision pattern
+	lsrHitPtrn := 0b00000000
+	# Set i to single dot
+	i := pixel-20
+	
+	# Draw laser one pixel at a time
+	loop
+		# Draw
+		sprite shipX laserY 1
+		# Put collision flag into LSB of hit pattern register
+		lsrHitPtrn |= vf
+		# Build pattern by shifting left
+		lsrHitPtrn <<= lsrHitPtrn
+		# Check for valid collision pattern
+		# 0000 0xxx too low, keep checking
+		# 0000 1000 Catch rock, delete
+		# 0000 1010 Shoot rock, delete
+		# 0000 1100 Dodge rock, stop laser
+		# 0000 1110 reserved, error
+		jump0 laserHitTable
+		# Match collision pattern
+		: laserHitTable
+			jump continueLaser	#  0 Too soon
+			jump continueLaser	#  2 ...
+			jump continueLaser	#  4 ...
+			jump continueLaser	#  6 ...
+			jump hitPattern1000	#  8 Catch type (destroy and - points)
+			jump hitPattern1010	# 10 Shoot type (destroy and + points)
+			jump hitPattern1100	# 12 Dodge type (stop laser  - points)
+			jump handleError		# 14 Error
+		# Laser will be drawn two pixels past initial collision to determine type of rock that was hit
+		# Rock shapes must be distinct and horizontally symetrical
+		# A value of 0 in lsrHitPtrn means no collision has occured yet
+		# 1 = hit, 0 = no hit
+		# 100 -> catch type
+		# 101 -> shoot type
+		# 110 -> dodge type
+		# 111 -> not used
+		# Values greater than 0 but less than 100 require more samples
+		# Last shift doubles final values
+		
+		: continueLaser
+		# Stop drawing when laserY reaches top of screen
+		if laserY == 0 then jump endShipLaser
+		# Move position one pixel up
+		laserY -= 1
+	again
+	
+	
+: hitPattern1100
+	# Dodge type rock, stop laser
+	# Set flag for immediate erasure of top 4 pixels of laser to avoid collision issues
+	# Subtract points from total
+	#
+	# Erase top 4 pixels of laser now to avoid collision issues before time to erase laser
+	i := line-420
+	sprite shipX laserY 4
+	# Update with new end value of laser
+	laserY += 4
+	jump endShipLaser
+
+: hitPattern1000
+	# Catch rock type - assemble [i := array-addr] instruction 
+	:unpack 0xA catch-xys
+	# Subtract points from total
+	#
+	# Process hit
+	jump svcLaserHit
+	
+: hitPattern1010	
+	# Shoot rock type - assemble [i := array-addr] instruction
+	:unpack 0xA shoot-xys
+	# Add points to total
+	#
+	# Process hit
+	#jump svcLaserHit
+	
+: svcLaserHit
+	# Set i to location instruction is needed
+	i := hitSeti 		
+	# Save instruction there
+	save v1
+	# Copy laserY value
+	lsrHitY := laserY
+	# Rocks use an offset of 224 ( 64 * 5 ) actual position doesn't change
+	# Additional offset of -1 required to match Y value of rock (sprite start is 1 pixel past end of laser)
+	lsrHitY += 223
+	# Erase top 2 laser pixels now for aesthetics
+	i := line-420
+	sprite shipX laserY 2
+	# Update with new end value of laser
+	laserY += 2
+	# Load rock registers
+	i := rock-registers
+	load v6
+	# Set i to XY array for hit rock type
+	: hitSeti 0x00 0x00	
+	# Amount to increase i for each array element
+	rockIndex := 2
+	# Amount to increase i to locate sprite for current rock type
+	rockOffset := 32
+	# Iterate array elements until we find a match
+	loop
+		# Load X into v0 and Y into v1
+		load v1
+		# Check if this is the correct rock
+		# Two values to check for shoot rock type
+		if rockY == lsrHitY then jump hitThisRock			# If match on value 1 process hit, otherwise check value 2
+		lsrHitY += 1																	# Increment by one to get second value to check
+		if rockY != lsrHitY then jump hitNextRock     # If no match on value 2, check next rock
+																									# Else match on value 2 continue with hit process
+		: hitThisRock
+		# Found rock, copy rockY value before clearing
+		rockOldY := rockY		
+		# Clear and save rockY before changing i
+		rockY := 0
+		save v1
+		# Increment i by rockOffset to locate sprite for this rock type
+		i += rockOffset
+		# Draw over rock to erase
+		sprite rockX rockOldY 4
+		# Flag new rock for spawn and save value
+		rksNeeded += 1
+		i := rock-registers
+		save v3
+		# Done here
+		jump endShipLaser
+		
+		# Prepare to check next array slot
+		: hitNextRock
+		# Increment to next element
+		i += rockIndex
+		# Decrement offset
+		rockOffset -= 2
+		# Restore lsrHitY to first value
+		lsrHitY -= 1	
+		# Check if end of array
+		if rockOffset != 0 then
+	again
+	
+	# Error, rock hit by laser was not found
+	jump handleError
+;
+
+: endShipLaser
+	# Save laser data for later erasure
+	lsrVX 		:= shipX
+	lsrVYStrt := shipY
+	lsrVYEnd  := laserY
+	i := laser-xyy
+	save v2
+	# Set state to visible
+	laserState := 1
+	# Start laser viewable timer
+	laserTemp := laserViewTime
+	delay := laserTemp
+;
+
+: delShipLaser
+	# Load saved laser data
+	i := laser-xyy
+	load v2
+	# Set i to single pixel for laser
+	i := pixel-20
+	# Increment now and decrement at start of loop
+	lsrVYStrt += 1
+	# Erase laser one pixel at a time
+	loop
+		# Decrement to go up screen
+		lsrVYStrt -= 1
+		# Draw over laser to erase
+		sprite lsrVX lsrVYStrt 1
+		# Check for end
+		if lsrVYStrt != lsrVYEnd then
+	again
+	# Change laser state to not visible
+	laserState := 0	
+	# Start laser cooldown timer
+	v0 := laserLimit
+	delay := v0
+;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Blink thruster flame when up arrow is pressed
+: shipThrust
+	i := flame
+	
+	# Erase flame if visible
+	if flameState == 1 begin
+		flameState := 0
+		sprite shipX shipY 8
+		# Return now to keep flame off a little longer
+		return
+	end
+		
+	# Check for up key (movement registers not loaded)
+	v0 := upKey
+	if v0 -key then return
+	# Draw flame
+	flameState := 1
+	sprite shipX shipY 8
+;
+
+
+			 ########
+######## MISC ###############################################################
+			 ########
+
+
+: handleError
+	# Clear screen and show error sprite
+	clear
+	i := error-sprite
+	v0 := 4
+	v1 := 4
+	sprite v0 v1 5
+	loop
+		# Just stop in this infinite loop
+	again
+
+
+			 ########
+######## DATA ###############################################################
+			 ########
+
+
+# Base ship sprite and xor directional versions
+: ship-test
+	0x00 0x20 0x20 0x70 0x00 0x00 0x00 0x00
+: ship-test-up
+	0x00 0x20 0x00 0x50 0x70 0x00 0x00 0x00
+: ship-test-down
+	0x20 0x00 0x50 0x70 0x00 0x00 0x00 0x00
+: ship-test-up-down-invalid
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: ship-test-left
+	0x00 0x30 0x30 0x48 0x00 0x00 0x00 0x00
+: ship-test-up-left
+	0x00 0x20 0x30 0x60 0x38 0x00 0x00 0x00
+: ship-test-down-left
+	0x10 0x30 0x18 0x70 0x00 0x00 0x00 0x00
+: ship-test-up-down-left-invalid
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: ship-test-right
+	0x00 0x60 0x60 0x90 0x00 0x00 0x00 0x00
+: ship-test-up-right
+	0x00 0x20 0x60 0x30 0xE0 0x00 0x00 0x00
+: ship-test-down-right
+	0x40 0x60 0xC0 0x70 0x00 0x00 0x00 0x00
+
+	
+# Misc sprites
+: flame
+	0x00 0x00 0x00 0x00 0x00 0x20 0x00 0x00
+: error-sprite
+	0xC0 0x80 0xC0 0x80 0xC0
+: pixel-20
+	0x20
+: line-420
+	0x20 0x20 0x20 0x20
+
+: movement-registers
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: rock-registers
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: zero-registers
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	
+# Arrays to hold X/Y values of falling rocks
+# Sprite data for matching rock type immediatly follows each array
+# Rock type for collision behavior follows sprite
+: dodge-xys
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	: dodge-rock 				0x60 0x90 0xF0 0x60
+	: dodge-rkClsnType	0x01
+: shoot-xys
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	: shoot-rock				0x90 0x60 0x90 0x60
+	: shoot-rkClsnType	0x01
+: catch-xys
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	: catch-rock				0x00 0x00 0x00 0xe0
+	: catch-rkClsnType	0x02
+	 
+#  Position data [X] [start Y] [end Y] for laser beam
+: laser-xyy
+	0x00 0x00 0x00
+	 
+	 
+	 
+	 
+	 
+	 
+	 
+

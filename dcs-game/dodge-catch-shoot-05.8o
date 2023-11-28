@@ -1,0 +1,361 @@
+# Scratch registers:
+# v0, v1, v2, v3
+
+# Globals:
+# vC, vD, vE
+
+# v4 thru vB are loaded in moveShip routine
+
+
+# ship-test is base sprite
+# others are base sprite offset and xor'd with base
+# sprite position is updated before update
+# so offset must be opposite of movement direction
+# this erases current sprite and draws new on single line
+# which eliminates flicker
+: ship-test
+	0x00 0x10 0x10 0x38 0x00 0x00 0x00 0x00
+: ship-test-up
+	0x00 0x10 0x00 0x28 0x38 0x00 0x00 0x00
+: ship-test-down
+	0x10 0x00 0x28 0x38 0x00 0x00 0x00 0x00
+: ship-test-up-down-invalid
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: ship-test-left
+	0x00 0x18 0x18 0x24 0x00 0x00 0x00 0x00
+: ship-test-up-left
+	0x00 0x10 0x18 0x30 0x1C 0x00 0x00 0x00
+: ship-test-down-left
+	0x08 0x18 0x0C 0x38 0x00 0x00 0x00 0x00
+: ship-test-up-down-left-invalid
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: ship-test-right
+	0x00 0x30 0x30 0x48 0x00 0x00 0x00 0x00
+: ship-test-up-right
+	0x00 0x10 0x30 0x18 0x70 0x00 0x00 0x00
+: ship-test-down-right
+	0x20 0x30 0x60 0x38 0x00 0x00 0x00 0x00
+: flame
+	0x00 0x00 0x00 0x00 0x00 0x10 0x00 0x00
+: pixel
+	0x80
+: pixer
+	0x01
+: rock
+	0x60 0x90 0xB0 0x60
+: rock-edge
+	0x00 0x00 0x90 0x60
+: rock-down
+	0x80 0x00 0x00 0x00
+	
+	
+# Initial ship position
+:const shipInitX	27
+:const shipInitY	26
+:const maxRocks		 4
+:const rkSpacing   6
+
+# Rock registers
+:alias rockX			v0
+:alias rockY			v1
+:alias rockIndex	v2
+:alias rockCount	v3
+#
+:alias rksNeeded  va
+:alias rockDelay	vb
+
+
+# Registers for ship movement
+:alias movHrz			v4
+:alias movVrt			v5
+:alias dirVal			v6
+:alias arrowCheck	v7
+:alias keyLeft		v8
+:alias keyRight		v9
+:alias keyUp			va
+:alias keyDown		vb
+# Player ship state
+:alias flameState	vc
+:alias shipX			vd
+:alias shipY			ve
+
+:monitor v0 15
+
+: initShip
+	# Registers
+	movHrz			:= 0
+	movVrt			:= 0
+	dirVal			:= 0
+	arrowCheck	:= 0
+	keyLeft			:= 7
+	keyRight		:= 9
+	keyUp				:= 5
+	keyDown			:= 8
+	##
+	flameState	:= 0
+	shipX				:= shipInitX
+	shipY				:= shipInitY
+	# Save
+	i := movement-registers
+	save vb
+	# Draw
+	i := ship-test
+	sprite shipX shipY 8
+	###
+	#i := pixel
+	#v0 := 0
+	#v1 := 0
+	#sprite v0 v1 1
+	#i := pixel
+	#v0 := 63
+	#v1 := 31
+	#sprite v0 v1 1
+	#i := rock
+	#v0 := 29
+	#v1 := 0
+	#sprite v0 v1 4
+	###
+	
+		v0 := 0
+		v1 := 0
+		v2 := 0
+		v3 := 0
+		v4 := 0
+		v5 := 0
+		v6 := 0
+		v7 := 0
+		v8 := 0
+		v9 := 0
+		va := 0
+		vb := 0
+	rockDelay := rkSpacing
+	rksNeeded := maxRocks
+	i := rock-registers
+	save vb
+;
+
+
+# --------------------------------------------------------------------------
+# Begin --------------------------------------------------------------------
+: main
+	initShip
+	
+		v1 := 0
+		v2 := 0
+		v3 := 0
+		i := rock-registers
+		save v3
+	
+	# Primary program loop
+	loop
+		# Check for arrow keys and move ship
+		playerShip			
+		dodgeRocks
+		#shootRocks
+		#catchRocks
+	again
+# End Main -----------------------------------------------------------------
+# --------------------------------------------------------------------------
+
+
+: dodgeRocks
+	i := rock-registers
+	load vb
+
+	# Move existing rocks
+	if rksNeeded != maxRocks then moveRocks
+
+	# Spawn new rocks
+	# rksNeeded is number needed to reach max and is decremented with each new rock spawn
+	# only one rock is spawned at a time and uses rkSpacing to have a delay between spawns
+	# when a rock is removed rksNeeded is incremented
+	# rocks are removed when they scroll down too far, collide with ship or are destryoed
+	if rksNeeded != 0 then spawnRock
+	
+	i := rock-registers
+	save vb
+;
+
+: rock-down2
+	0x60 0xf0 0x20 0x40
+: moveRocks
+	rockIndex := 0
+	rockCount := maxRocks
+	rockCount += rockCount
+	loop
+		i := dodge-xys
+		i += rockIndex
+		load v1
+		if rockY != 0 begin
+			########
+		
+		
+			i := rock-down2
+			sprite rockX rockY 4
+			
+			rockY += 1
+			i := dodge-xys
+			i += rockIndex
+			save v1
+			
+			i := rock-edge
+			sprite rockX rockY 4
+			
+			
+			########
+		end
+		
+		rockIndex += 2
+		if rockIndex != rockCount then 
+	again
+		###
+		#
+		# get x and y for rock
+		#
+		# draw new leading edge
+		#
+		# store collision result
+		#
+		# draw down-shifted xor version of rock, without its leading edge
+		#
+		###
+;
+
+
+: spawnRock
+	rockDelay -= 1
+	if rockDelay != 0 then return
+	rockDelay := rkSpacing											# Reset
+	rksNeeded -= 1															# Decrement
+	# Spawn another rock
+	
+	v2 := 0
+	loop
+		i := dodge-xys
+		i += v2
+		load v1
+		if v1 != 0 begin
+			v2 += 2
+			if v2 == 32 then return
+			again
+		end
+	###
+	rockX := random 0b00111111
+	rockY := 1
+	save v1
+	i := rock
+	sprite v0 v1 4
+	###
+;
+
+
+# Slow down
+: speedDlay
+	v0 := 1																				# Set delay timer
+	delay := v0
+;
+	
+	
+: playerShip
+	# Blink thruster flame when UP is pressed
+	shipThrust
+	
+	# Limit ship movement speed
+	v0 := delay																	# Check timer
+	if v0 != 0 then return
+	# Delay timer finished
+	speedDlay																		# Reset delay timer
+	# Check arrow keys and move ship
+	moveShip
+;
+
+	
+: shipThrust
+	i := flame
+	
+	# Erase flame if visible
+	if flameState == 1 begin
+		flameState := 0
+		sprite shipX shipY 8
+		# Return now to keep flame off a little longer
+		return
+	end
+		
+	# Check for up key
+	if keyUp -key then return
+	# Draw flame
+	flameState := 1
+	sprite shipX shipY 8
+;
+
+	
+: moveShip
+	# Load registers
+	i := movement-registers
+	load vb
+	# No horizontal arrow keys will result in a movement value of 0
+	# Both horizontal keys will also result in a movement value of 0
+	# One horizontal key will result in a movement value of -1 or +1 (up or down)
+	# Ditto for vertical: 0 or -1 or +1 (na or left or right)
+	# Horizontal
+	if shipX != 254 begin 
+		if keyLeft key then movHrz += 255
+	end
+	if keyRight key begin
+		if shipX != 59 then movHrz += 1
+	end
+	if movHrz != 0 then arrowCheck += 1
+	# Vertical
+	if keyUp key begin
+		if shipY != 255 then movVrt += 255
+	end
+	if keyDown key begin
+		if shipY != 28 then movVrt += 1
+	end
+	if movVrt != 0 then arrowCheck += 1
+	# Return if no valid arrow key combination pressed
+	# Will be zero for: no keys, all 4 keys, both vrt (no hrz), both hrz (no vrt)
+	# Three key presses will cancel one direction out and behave as a single key
+	# Single key presses will pass, as will two with one hrz / one vrt
+	if arrowCheck == 0 then return
+	
+	# Erase thruster flame before moving ship
+	# Do now to avoid needing variables for flame position
+	if flameState == 1 begin
+		i := flame
+		sprite shipX shipY 8
+		flameState := 0
+	end
+	
+	# Update position: add or subtract 1 from one or both vars
+	shipX += movHrz
+	shipY += movVrt
+	# Use the direction value as an offset to sprite table
+	# dirVal is x8 for 8 byte sprites
+	if movVrt == -1 then dirVal += 0b00001000		# Up
+	if movVrt ==  1 then dirVal += 0b00010000		# Down
+	if movHrz == -1 then dirVal += 0b00100000		# Left
+	if movHrz ==  1 then dirVal += 0b01000000		# Right
+	i := ship-test
+	i += dirVal
+	# Draw
+	sprite shipX shipY 8
+;
+
+# Updated with default values at init
+: movement-registers
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	
+: rock-registers
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	
+: dodge-xys
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	
+: shoot-xys
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+	
+: catch-xys
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00

@@ -2,12 +2,11 @@
 
 # Coding experiments in Chip-8
 
-I've been experimenting with Chip-8 and SCHIP using
-[Octo](https://johnearnest.github.io/Octo/index.html), a high-level assembler for the
+This repository is a collection of my Octo coding experiments.
+[Octo](https://johnearnest.github.io/Octo/index.html) is a high-level assembler for the
 [Chip-8](https://en.wikipedia.org/wiki/CHIP-8) virtual machine.
 Chip-8 is an interpreted programming language from 1977, written for CDP1802 based computers.
-Octo supports the original Chip-8 specifications as well as several expanded variants.
-This repository is a collection of my Octo coding experiments.  
+Octo supports the original Chip-8 specifications as well as several expanded variants.  
 &nbsp;  
 &nbsp;  
 
@@ -42,4 +41,14 @@ be used to save space.
 
 ![GIF recording of optimized straight line algorithm in Octo](./images/lines-straight.gif)  
 Drawing random lines alternating between horizontal and vertical. Example uses  
-SCHIP `hires` 128x64 mode running in Octo at the lowest speed of 7 cycles/frame.
+SCHIP `hires` 128x64 mode running in Octo at the lowest speed of 7 cycles/frame.  
+&nbsp;  
+&nbsp;  
+
+
+## Dodge Catch Shoot
+
+Source: [dodge-catch-shoot-1.1-octo.8o](./dcs-game/dodge-catch-shoot-1.1-octo.8o)
+([open in Octo](https://johnearnest.github.io/Octo/index.html?key=eBdNMAl6))  
+
+Read [details](./dcs-game/README.md) about this game

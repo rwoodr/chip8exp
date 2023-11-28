@@ -1,0 +1,141 @@
+: ship-straight
+	0x10 0x28 0x28 0x44 0xBA 0x00 0x00
+: ship-left
+	0x10 0x28 0x28 0x24 0x5A 0x00 0x00
+: ship-right
+	0x10 0x28 0x28 0x48 0xB4 0x00 0x00
+: ship-forward
+	0x10 0x28 0x28 0x44 0xBA 0x00 0x10
+	
+: ship-test
+	0x00 0x10 0x10 0x38 0x00 0x00 0x00
+: ship-test-up
+	0x00 0x10 0x00 0x28 0x38 0x00 0x00
+: ship-test-down
+	0x10 0x00 0x28 0x38 0x00 0x00 0x00
+: ship-test-up-down-invalid
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: ship-test-left
+	0x00 0x18 0x18 0x24 0x00 0x00 0x00
+: ship-test-up-left
+	0x00 0x10 0x18 0x30 0x1C 0x00 0x00
+: ship-test-down-left
+	0x08 0x18 0x0C 0x38 0x00 0x00 0x00
+: ship-test-up-down-left-invalid
+	0x00 0x00 0x00 0x00 0x00 0x00 0x00
+: ship-test-right
+	0x00 0x30 0x30 0x48 0x00 0x00 0x00
+: ship-test-up-right
+	0x00 0x10 0x30 0x18 0x70 0x00 0x00
+: ship-test-down-right
+	0x20 0x30 0x60 0x38 0x00 0x00 0x00
+	
+:const keyLeft		 7
+:const keyRight		 9
+:const keyUp			 5
+:const keyDown		 8
+
+:alias shipx			v0
+:alias shipy			v1
+:alias dlayVar		v3
+:alias movHrz			v4
+:alias movVrt			v5
+:alias dirVal			v6
+:alias offset			v7
+:alias arrowKeyCheck	v8
+
+:monitor v3 1
+:monitor v4 1
+:monitor v5 1
+:monitor v6 1
+
+: speedDlay
+	dlayVar := 1																	# Set delay timer
+	delay := dlayVar															#  for movement speed limiter
+;
+
+: main
+	# Initialize
+	i  := ship-test																# Ship sprite data
+	shipx := 27																			# Horizontal position
+	shipy := 26																			# Vertical position
+	sprite shipx shipy 7																# Draw
+	speedDlay
+	
+	vA := keyLeft
+	vB := keyRight
+	vC := keyUp
+	vD := keyDown
+	
+	# Primary program loop
+	loop
+		dlayVar := delay														# Check
+		if dlayVar != 0 then jump skipMove					#  delay timer
+		# Delay timer finished
+		speedDlay																		# Reset delay timer 
+		
+		
+		# Check for arrow keys and move ship
+		moveShip
+		: skipMove
+	again
+	
+	: moveShip
+		# Reset 
+		movHrz := 0
+		movVrt := 0
+		dirVal := 0
+		offset := 0
+		i := ship-test
+		arrowKeyCheck := 0
+		# No horizontal arrow keys will result in a movement value of 0
+		# Both horizontal keys will also result in a movement value of 0
+		# One horizontal key will result in a movement vale of -1 or +1 (up or down)
+		# Ditto for vertical: -1 or +1 (left or right)
+		# Horizontal
+		if vA key then movHrz += 255
+		if vB key then movHrz += 1
+		if movHrz != 0 then arrowKeyCheck += 1
+		# Vertical
+		if vC key then movVrt += 255
+		if vD key then movVrt += 1
+		if movVrt != 0 then arrowKeyCheck += 1
+		# Return if no valid arrow key combination pressed
+		# Will be zero for: no keys, all 4 keys, both vrt (no hrz), both hrz (no vrt)
+		if arrowKeyCheck == 0 then return
+		# Calculate a value for current direction of the 8 possible
+		# Value range is 0 - 15, with only 1,2,4,5,6,8,9,10 being valid
+		# Empty sprites at 3 and 7 are required for proper offset functionality
+		if movVrt == -1 then dirVal += 0b0001		# Up
+		if movVrt ==  1 then dirVal += 0b0010		# Down
+		if movHrz == -1 then dirVal += 0b0100		# Left
+		if movHrz ==  1 then dirVal += 0b1000		# Right
+		# Return if no valid arrow key combination pressed
+		# Not needed here because of check performed above
+		if dirVal == 0 then return
+		# Use the direction value as an offset to sprite table
+		# Add dirVal once for each byte in sprite to use as offset
+		i += dirVal
+		i += dirVal
+		i += dirVal
+		i += dirVal
+		i += dirVal
+		i += dirVal
+		i += dirVal
+		# Draw
+		v0 += movHrz
+		v1 += movVrt
+		sprite v0 v1 7
+	;
+	
+	# 0001 				up							   
+	# 0010 				down							 
+	# 0011				up-down				(invalid)
+	# 0100 				left							 
+	# 0101 				UL Diagnal				 
+	# 0110 				DL Diagnal				 
+	# 0111				up-down-left	(invalid)
+	# 1000 				right							 
+	# 1001 				UR Diagnal				 
+	# 1010 				DR Diagnal				
+	

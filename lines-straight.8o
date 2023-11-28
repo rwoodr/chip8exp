@@ -113,8 +113,8 @@
 	# This function will return to caller of `drawLine` when complete
 	if dy == 0 then jump hrzStraight
 	
-	# Ignore any other line if we got this far
-	return
+# Ignore any other line if we got this far
+return
 	
 	
 	#=======================================#
@@ -123,15 +123,15 @@
 	#
 	# Draw left to right only
 	# Draw (0 to 16) 8-pixel segments, then (0 or 1) of a (1 to 7) pixel segment
-	# Loops unrolled with jump indexes
+	# Loop unrolled with jump index
 	#
 	: hrzStraight
 		# Swap starting point for right to left lines
 		if sx == 255 then x0 := x1
 		# Set sprite address to 8-pixel segment
 		i := hrzLine-8px
-		# Add starting point to distance calculation
-		# dx is now total line length (min 1, max 127)
+		# dx is difference between x0 and x1 (min 1, max 127)
+		# Add starting point to dx to get total line length
 		dx += 1	
 		# dx value is now 2 to 128, copy dx to s8
 		s8 := dx
@@ -185,7 +185,7 @@
 	: vrtStraight
 		# Swap starting point for bottom to top lines
 		if sy == 255 then y0 := y1
-		# dy is difference from y0 and y1 (min 1, max 63)
+		# dy is difference between y0 and y1 (min 1, max 63)
 		# Add starting point to dy for total line length
 		dy += 1
 		# dy value is now 2 to 64, copy dx to s8
@@ -212,14 +212,14 @@
 		sprite x y 8  y += 8  # 20 (24 pixels = 3 segments)
 		sprite x y 8  y += 8  # 24 (16 pixels = 2 segments)
 		sprite x y 8  y += 8  # 28 ( 8 pixels = 1 segment )
-		# Complete line       # 32 (<8 pixels = 0 segments)
-		# Copy dy to v0 and x4 it (2 instructions * 2 bytes each)
+		# Copy dy to v0       # 32 (<8 pixels = 0 segments)
+		# and multiply by 4 (2 instructions * 2 bytes each)
 		v0 <<= dy
 		v0 <<= v0
 		# v0 is now jump index for final segment
 		jump0 vrtFinalSegment
 		: vrtFinalSegment
-		return       return # 0 pixels (line length was divisible by 8)
+		return       return # 0 pixels (line length evenly divisible by 8)
 		sprite x y 1 return # 1 pixel
 		sprite x y 2 return # 2 pixels
 		sprite x y 3 return # 3 pixels
